@@ -92,21 +92,16 @@ export default function TransactionRow({
           )}
 
           {onDelete && (
-        <button
-          type="button"
-          onClick={() => onDelete(t._id || t.id)}
-          className="
-            p-1.5 rounded-lg text-slate-400 
-            hover:bg-red-500/10 hover:text-red-400 
-            md:opacity-0 md:group-hover:opacity-100 
-            transition-all
-          "
-          title="Delete transaction"
-          aria-label="Delete transaction"
-        >
-          <Trash2 size={13} />
-        </button>
-      )}
+            <button
+              type="button"
+              onClick={() => onDelete(t._id || t.id)}
+              className="p-1.5 rounded-lg text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all"
+              title="Delete transaction"
+              aria-label="Delete transaction"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
         </div>
       )}
     </div>
