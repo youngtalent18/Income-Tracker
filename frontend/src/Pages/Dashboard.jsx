@@ -11,70 +11,83 @@ import { toast } from "react-hot-toast";
 
 import AppLayout from "../layouts/AppLayout";
 import Topbar from "../layouts/TopBar";
+
 import StatCard from "../Components/StatCard";
 import RevenueChart from "../Components/RevenueChart";
 import CategoryChart from "../Components/CategoryChart";
 import TransactionRow from "../Components/TransactionRow";
 import AddTransactionModal from "../Components/AddTransactionModal";
 import MilestoneCard from "../features/MilestoneCard";
+
 import { normalizeCategory } from "../constants/constant";
 import { milestonesDb, transactionsDb } from "../lib/data";
 import { getApiError } from "../lib/api";
 
-const isCompletedTransaction = (transaction) =>
-  transaction.status === "completed";
+const isCompleted = (t) => t?.status === "completed";
 
 export default function Dashboard() {
   const [range, setRange] = useState("monthly");
   const [showAddTx, setShowAddTx] = useState(false);
+
   const [transactions, setTransactions] = useState([]);
   const [milestones, setMilestones] = useState([]);
 
+  // ---------------- LOAD ----------------
   useEffect(() => {
     let mounted = true;
 
-    Promise.all([transactionsDb.getAll(), milestonesDb.getAll()])
+    Promise.all([
+      transactionsDb.getAll(),
+      milestonesDb.getAll(),
+    ])
       .then(([txs, goals]) => {
         if (!mounted) return;
-        setTransactions(txs);
-        setMilestones(goals);
+        setTransactions(txs || []);
+        setMilestones(goals || []);
       })
-      .catch((err) => toast.error(getApiError(err, "Could not load dashboard")));
+      .catch((err) =>
+        toast.error(getApiError(err, "Dashboard load failed"))
+      );
 
     return () => {
       mounted = false;
     };
   }, []);
 
-  const addTransaction = async (transaction) => {
+  // ---------------- ADD TRANSACTION ----------------
+  const addTransaction = async (tx) => {
     try {
-      const newTx = await transactionsDb.add(transaction);
+      const newTx = await transactionsDb.add(tx);
       setTransactions((prev) => [newTx, ...prev]);
       toast.success("Transaction added");
     } catch (err) {
-      toast.error(getApiError(err, "Could not add transaction"));
+      toast.error(getApiError(err, "Add failed"));
     }
   };
 
+  // ---------------- STATS ----------------
   const stats = useMemo(() => {
-    const completed = transactions.filter(isCompletedTransaction);
+    const completed = transactions.filter(isCompleted);
 
     const totalRevenue = completed.reduce(
-      (sum, t) => sum + Number(t.amount || 0),
+      (sum, t) => sum + Number(t?.amount || 0),
       0
     );
 
     const totalOrders = completed.length;
 
     const totalCustomers = new Set(
-      completed.map((t) => t.customerName).filter(Boolean)
+      completed
+        .map((t) => t?.customerName)
+        .filter(Boolean)
     ).size;
 
     return {
       totalRevenue,
       totalCustomers,
       totalOrders,
-      avgOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
+      avgOrderValue:
+        totalOrders > 0 ? totalRevenue / totalOrders : 0,
       revenueChange: 12.5,
       customerChange: 8.2,
       ordersChange: 15.1,
@@ -82,23 +95,31 @@ export default function Dashboard() {
     };
   }, [transactions]);
 
+  // ---------------- CHART ----------------
   const chartData = useMemo(() => {
-    return transactions.filter(isCompletedTransaction).slice(0, 7).map((t) => ({
-      date: t.product,
-      revenue: Number(t.amount || 0),
-      orders: 1,
-    }));
+    return transactions
+      .filter(isCompleted)
+      .slice(0, 7)
+      .map((t) => ({
+        date: t?.product || "N/A",
+        revenue: Number(t?.amount || 0),
+        orders: 1,
+      }));
   }, [transactions]);
 
+  // ---------------- CATEGORY ----------------
   const categoryData = useMemo(() => {
     const grouped = {};
 
-    transactions.filter(isCompletedTransaction).forEach((t) => {
-      const category = normalizeCategory(t.category);
-      grouped[category] = (grouped[category] || 0) + Number(t.amount || 0);
+    transactions.filter(isCompleted).forEach((t) => {
+      const key = normalizeCategory(t?.category);
+      grouped[key] = (grouped[key] || 0) + Number(t?.amount || 0);
     });
 
-    const total = Object.values(grouped).reduce((sum, value) => sum + value, 0);
+    const total = Object.values(grouped).reduce(
+      (s, v) => s + v,
+      0
+    );
 
     return Object.entries(grouped).map(([category, revenue]) => ({
       category,
@@ -120,7 +141,9 @@ export default function Dashboard() {
       />
 
       <main className="flex-1 p-4 lg:p-6 space-y-6">
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+
+        {/* ---------------- STATS ---------------- */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <StatCard
             title="Total Revenue"
             value={stats.totalRevenue}
@@ -140,7 +163,7 @@ export default function Dashboard() {
           />
 
           <StatCard
-            title="Total Orders"
+            title="Orders"
             value={stats.totalOrders}
             change={stats.ordersChange}
             icon={ShoppingCart}
@@ -149,7 +172,7 @@ export default function Dashboard() {
           />
 
           <StatCard
-            title="Avg Order Value"
+            title="Avg Order"
             value={stats.avgOrderValue}
             change={stats.avgOrderChange}
             icon={TrendingUp}
@@ -158,8 +181,9 @@ export default function Dashboard() {
           />
         </div>
 
+        {/* ---------------- CHARTS ---------------- */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          <div className="xl:col-span-2 bg-gray-900 border border-slate-700 rounded-xl p-5">
+          <div className="xl:col-span-2 bg-gray-900 border border-slate-700 rounded-xl p-5 overflow-hidden">
             <RevenueChart data={chartData} type="line" />
           </div>
 
@@ -168,26 +192,32 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* ---------------- MILESTONES ---------------- */}
         {activeMilestones.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {activeMilestones.map((m) => (
-              <MilestoneCard key={m._id || m.id} milestone={m} />
+              <MilestoneCard
+                key={m._id || m.id}
+                milestone={m}
+              />
             ))}
           </div>
         )}
 
-        <div className="bg-gray-900 border border-slate-700 rounded-xl">
-          <div className="flex justify-between px-5 py-4 border-b border-gray-700">
+        {/* ---------------- TRANSACTIONS ---------------- */}
+        <div className="bg-gray-900 border border-slate-700 rounded-xl overflow-hidden">
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-gray-700">
             <h2 className="text-sm font-semibold text-white">
               Recent Transactions
             </h2>
 
             <button
               onClick={() => setShowAddTx(true)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-cyan-500 text-xs"
+              className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-cyan-500 text-xs font-medium hover:opacity-90 transition w-full sm:w-auto"
             >
               <Plus size={12} />
-              Add
+              Add Transaction
             </button>
           </div>
 

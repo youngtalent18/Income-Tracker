@@ -6,7 +6,7 @@ export default function ProtectedRoute({ children, role }) {
   const token = auth.getToken();
 
   if (!user || !token) return <Navigate to="/" replace />;
-  if (role && user.role !== role) return <Navigate to="/dashboard" replace />;
+  if (role && user.role !== "admin") return <Navigate to="/" replace />;
 
   return children;
 }
