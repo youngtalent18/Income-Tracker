@@ -29,7 +29,7 @@ export default function TransactionRow({
   return (
     <div
       className={`
-        flex items-center gap-3
+        grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-3
         px-3 sm:px-4
         border-b border-slate-800/60
         hover:bg-slate-800/40
